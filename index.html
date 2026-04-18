@@ -245,7 +245,8 @@ main { padding: 16px; max-width: 680px; margin: 0 auto; padding-bottom: 40px; }
       <input id="ma-desc" placeholder="Marca, nombre, tamaño…" autocomplete="off" />
     </div>
 
-    <div class="field"><label>Precio acordado (MXN) *</label><input id="ma-precio" type="number" placeholder="350" /></div>
+    <div class="field"><label>Cantidad *</label><input id="ma-cantidad" type="number" min="1" value="1" placeholder="1" /></div>
+    <div class="field"><label>Precio acordado por pieza (MXN) *</label><input id="ma-precio" type="number" placeholder="350" /></div>
     <div class="field"><label>Anticipo recibido (MXN)</label><input id="ma-anticipo" type="number" placeholder="150" value="0" /></div>
     <div class="field"><label>Fecha estimada de entrega</label><input id="ma-fecha" type="date" /></div>
 
@@ -502,7 +503,7 @@ function renderApartados() {
   var entregados = state.apartados.filter(function(a){ return a.estado==='entregado'; });
 
   // resumen anticipos pendientes
-  var porCobrar = activos.reduce(function(s,a){ return s+((a.precio||0)-(a.anticipo||0)); },0);
+  var porCobrar = activos.reduce(function(s,a){ return s+((a.precio||0)*(a.cantidad||1)-(a.anticipo||0)); },0);
 
   var h = '<div class="row-flex" style="margin-bottom:12px"><h2 style="font-size:20px">Apartados</h2><button class="btn" onclick="openModal(\'apartado\',\'nuevo\')">+ Nuevo</button></div>';
 
@@ -527,7 +528,9 @@ function renderApartados() {
 
 function renderApartadoCard(a) {
   var est = ESTADOS[a.estado] || ESTADOS.pendiente;
-  var saldo = (a.precio||0) - (a.anticipo||0);
+  var cant = a.cantidad||1;
+  var totalPrecio = (a.precio||0) * cant;
+  var saldo = totalPrecio - (a.anticipo||0);
   var saldoClass = saldo<=0?"saldo-cero":"saldo-positivo";
   var cliente = state.clientes.find(function(c){ return c.id===a.clienteId; });
   var nombreCliente = cliente ? cliente.nombre : (a.clienteNombre||"Cliente");
@@ -545,12 +548,14 @@ function renderApartadoCard(a) {
         '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">'+
           '<div class="item-title">'+esc(nombreCliente)+'</div>'+
           '<span class="badge '+est.badge+'">'+est.label+'</span>'+
+          (cant>1?'<span class="badge" style="background:#e8eaf6;color:#3f51b5">×'+cant+' piezas</span>':'')+
           (a.enStock?'':'<span class="badge" style="background:#f3e5f5;color:#7b1fa2">Sin stock</span>')+
           (a.pedido?'<span class="badge" style="background:#e8f5e9;color:#27ae60">Pedido ✓</span>':'<span class="badge" style="background:#fdf3e7;color:#e67e22">Sin pedir</span>')+
         '</div>'+
-        '<div class="item-sub">🧴 '+esc(perfume)+'</div>'+
+        '<div class="item-sub">🧴 '+esc(perfume)+(cant>1?' <span style="color:#3f51b5">×'+cant+'</span>':'')+'</div>'+
         '<div class="sans" style="font-size:12px;margin-top:4px">'+
-          'Precio: '+fmt(a.precio)+' · Anticipo: '+fmt(a.anticipo)+' · '+
+          (cant>1?fmt(a.precio)+'/pza · Total: '+fmt(totalPrecio):'Precio: '+fmt(a.precio))+
+          ' · Anticipo: '+fmt(a.anticipo)+' · '+
           '<span class="'+saldoClass+'">Saldo: '+fmt(saldo)+'</span>'+
         '</div>'+
         (a.fechaEntrega?'<div class="item-sub">📅 Entrega est.: '+esc(a.fechaEntrega)+'</div>':'')+
@@ -569,7 +574,7 @@ function renderFinanzas() {
   var invStock = state.productos.reduce(function(s,p){ return s+p.stock*p.costo; },0);
   var valStock = state.productos.reduce(function(s,p){ return s+p.stock*p.precio; },0);
   var anticipos = state.apartados.filter(function(a){ return a.estado!=='entregado'; }).reduce(function(s,a){ return s+(a.anticipo||0); },0);
-  var porCobrar = state.apartados.filter(function(a){ return a.estado!=='entregado'; }).reduce(function(s,a){ return s+((a.precio||0)-(a.anticipo||0)); },0);
+  var porCobrar = state.apartados.filter(function(a){ return a.estado!=='entregado'; }).reduce(function(s,a){ return s+((a.precio||0)*(a.cantidad||1)-(a.anticipo||0)); },0);
 
   var porCanal={}, porMarca={};
   state.ventas.forEach(function(v){
@@ -670,6 +675,7 @@ function openModal(name, extra) {
       document.getElementById("ma-precio").value=ap.precio||"";
       document.getElementById("ma-anticipo").value=ap.anticipo||0;
       document.getElementById("ma-fecha").value=ap.fechaEntrega||"";
+      document.getElementById("ma-cantidad").value=ap.cantidad||1;
       document.getElementById("ma-notas").value=ap.notas||"";
       document.getElementById("ma-estado").value=ap.estado||"pendiente";
       maEnStock=ap.enStock!==false;
@@ -687,6 +693,7 @@ function openModal(name, extra) {
       document.getElementById("ma-title").textContent="Nuevo apartado";
       document.getElementById("ma-id").value="";
       ["ma-precio","ma-anticipo","ma-fecha","ma-notas","ma-desc"].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=""; });
+      document.getElementById("ma-cantidad").value="1";
       document.getElementById("ma-anticipo").value="0";
       document.getElementById("ma-estado").value="pendiente";
     }
@@ -810,6 +817,7 @@ function saveApartado() {
     clienteId: clienteId,
     clienteNombre: cliente?cliente.nombre:"",
     enStock: maEnStock,
+    cantidad: parseInt(document.getElementById('ma-cantidad').value)||1,
     precio: precio,
     anticipo: parseFloat(document.getElementById("ma-anticipo").value)||0,
     fechaEntrega: document.getElementById("ma-fecha").value||"",
@@ -847,7 +855,8 @@ function abrirEntregar(id) {
   var aviso=document.getElementById("men-stock-aviso");
   if (ap.enStock && ap.productoId) {
     aviso.style.display="";
-    refreshToggle("men-descontar-toggle","men-descontar-label",true,"Sí, descontar 1 unidad","No descontar");
+    var cantLabel = (ap.cantidad&&ap.cantidad>1) ? "Sí, descontar "+ap.cantidad+" unidades" : "Sí, descontar 1 unidad";
+    refreshToggle("men-descontar-toggle","men-descontar-label",true,cantLabel,"No descontar");
   } else {
     aviso.style.display="none";
   }
@@ -859,6 +868,7 @@ function confirmarEntrega() {
   if (!ap) return;
   var pagoFinal=parseFloat(document.getElementById("men-pago").value)||0;
   var updates={ estado:"entregado", pagoFinal:pagoFinal, anticipo:(ap.anticipo||0)+pagoFinal, fechaEntregaReal:today() };
+  var cantAp = ap.cantidad||1;
   var promise=db.collection("apartados").doc(id).update(updates);
 
   // Si hay pago final, registrarlo como venta
@@ -867,7 +877,7 @@ function confirmarEntrega() {
     promise=promise.then(function(){
       return db.collection("ventas").add({
         productoId:ap.productoId||"", producto:ap.productoNombre||(ap.descripcion||"Apartado"), marca:ap.productoMarca||"Apartado",
-        cantidad:1, precio:totalCobrado, total:totalCobrado, costoTotal:0,
+        cantidad:cantAp, precio:totalCobrado/cantAp, total:totalCobrado, costoTotal:0,
         canal:"Apartado", cliente:ap.clienteNombre||"",
         fecha:today(), nota:"Cobro de apartado",
         ts:firebase.firestore.FieldValue.serverTimestamp()
@@ -877,8 +887,10 @@ function confirmarEntrega() {
   // Descontar stock si aplica
   if (ap.enStock && ap.productoId && menDescontar) {
     var prod=null; state.productos.forEach(function(p){ if(p.id===ap.productoId) prod=p; });
-    if (prod && prod.stock>0) {
-      promise=promise.then(function(){ return db.collection("productos").doc(ap.productoId).update({stock:prod.stock-1}); });
+    if (prod && prod.stock>=cantAp) {
+      promise=promise.then(function(){ return db.collection("productos").doc(ap.productoId).update({stock:prod.stock-cantAp}); });
+    } else if (prod && prod.stock>0) {
+      promise=promise.then(function(){ return db.collection("productos").doc(ap.productoId).update({stock:0}); });
     }
   }
   promise
