@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet"/>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Serif Display',Georgia,serif;background:#faf7f4;color:#1a1208;min-height:100vh}
@@ -97,7 +98,20 @@ main{padding:16px;max-width:680px;margin:0 auto;padding-bottom:40px}
 .cb-m{background:#fce4ec;color:#c2185b}
 .cb-u{background:#f3e5f5;color:#6a1b9a}
 
-/* Cajitas */
+/* Login screen */
+#login-screen{position:fixed;inset:0;background:#faf7f4;z-index:999;display:flex;align-items:center;justify-content:center;padding:24px}
+.login-box{background:#fff;border-radius:16px;padding:32px 24px;width:100%;max-width:360px;box-shadow:0 4px 24px rgba(26,18,8,.10)}
+.login-logo{font-size:28px;text-align:center;margin-bottom:4px}
+.login-title{font-size:22px;text-align:center;margin-bottom:4px}
+.login-sub{font-family:'DM Sans',sans-serif;font-size:13px;color:#9a8a75;text-align:center;margin-bottom:28px}
+.login-error{font-family:'DM Sans',sans-serif;font-size:13px;color:#c0392b;text-align:center;margin-bottom:12px;min-height:18px}
+.btn-login{width:100%;background:#1a1208;color:#f5e6c8;border:none;border-radius:8px;padding:12px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;cursor:pointer;margin-top:4px}
+.btn-login:active{opacity:.8}
+.btn-login:disabled{opacity:.5;cursor:not-allowed}
+/* User chip in header */
+.user-chip{font-family:'DM Sans',sans-serif;font-size:11px;color:#c4a97d;opacity:.7;cursor:pointer;border:none;background:transparent;padding:4px 8px;border-radius:6px}
+.user-chip:hover{opacity:1;background:rgba(201,168,76,.1)}
+
 .cajita-tipo-btn{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
 .cajita-tipo-btn button{padding:6px 14px;border-radius:20px;border:1px solid #ddd4c4;background:#faf7f4;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;transition:all .2s;color:#7a6a55}
 .cajita-tipo-btn button.active-tipo{background:#1a1208;color:#f5e6c8;border-color:#1a1208}
@@ -130,6 +144,19 @@ main{padding:16px;max-width:680px;margin:0 auto;padding-bottom:40px}
 </head>
 <body>
 
+<!-- ── LOGIN SCREEN ── -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">🌸</div>
+    <div class="login-title">Signature Decants</div>
+    <div class="login-sub sans">Panel de gestión · Acceso privado</div>
+    <div class="login-error" id="login-error"></div>
+    <div class="field"><label>Correo</label><input id="login-email" type="email" placeholder="tu@correo.com" autocomplete="email"/></div>
+    <div class="field"><label>Contraseña</label><input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password"/></div>
+    <button class="btn-login" id="login-btn" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
 <header>
   <div>
     <div class="header-title">🌸 Signature Decants CUU</div>
@@ -138,6 +165,7 @@ main{padding:16px;max-width:680px;margin:0 auto;padding-bottom:40px}
   <div class="header-stat">
     <div class="header-stat-label">Ganancia total</div>
     <div class="header-stat-value" id="hdr-ganancia" style="color:#b8e09a">$0.00</div>
+    <button class="user-chip" id="user-chip" onclick="doLogout()" title="Cerrar sesión">— Salir</button>
   </div>
 </header>
 
@@ -454,6 +482,52 @@ var firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 var db = firebase.firestore();
+var auth = firebase.auth();
+
+// ── Auth ───────────────────────────────────────────────
+var appReady = false;
+
+auth.onAuthStateChanged(function(user){
+  if(user){
+    // Usuario autenticado: mostrar app, ocultar login
+    document.getElementById("login-screen").style.display="none";
+    var chip=document.getElementById("user-chip");
+    if(chip) chip.title="Cerrar sesión · "+user.email;
+    if(!appReady){ appReady=true; iniciarListeners(); }
+  } else {
+    // No autenticado: mostrar login, ocultar app
+    document.getElementById("login-screen").style.display="flex";
+    document.getElementById("login-btn").disabled=false;
+    document.getElementById("login-error").textContent="";
+  }
+});
+
+function doLogin(){
+  var email=document.getElementById("login-email").value.trim();
+  var pass=document.getElementById("login-pass").value;
+  var btn=document.getElementById("login-btn");
+  var errEl=document.getElementById("login-error");
+  if(!email||!pass){ errEl.textContent="Ingresa correo y contraseña"; return; }
+  btn.disabled=true; btn.textContent="Entrando…"; errEl.textContent="";
+  auth.signInWithEmailAndPassword(email,pass)
+    .catch(function(err){
+      btn.disabled=false; btn.textContent="Entrar";
+      errEl.textContent="Correo o contraseña incorrectos";
+    });
+}
+
+function doLogout(){
+  if(!confirm("¿Cerrar sesión?")) return;
+  auth.signOut();
+}
+
+// Permitir Enter en el campo de contraseña
+document.addEventListener("DOMContentLoaded",function(){
+  var passEl=document.getElementById("login-pass");
+  if(passEl) passEl.addEventListener("keydown",function(e){ if(e.key==="Enter") doLogin(); });
+  var emailEl=document.getElementById("login-email");
+  if(emailEl) emailEl.addEventListener("keydown",function(e){ if(e.key==="Enter") document.getElementById("login-pass").focus(); });
+});
 
 // ── Cloudinary ─────────────────────────────────────────
 var CLOUD_NAME = "ddv2nn8ic";
@@ -480,6 +554,8 @@ function initial(n){ return String(n||"?").trim().charAt(0).toUpperCase(); }
 function markLoaded(){ loadedCount++; if(loadedCount>=TOTAL) render(); }
 
 // ── Firestore Listeners ────────────────────────────────
+function iniciarListeners(){
+
 db.collection("catalogo").orderBy("marca").onSnapshot(function(snap){
   state.catalogo=snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
   populateSelects(); markLoaded(); if(loadedCount>=TOTAL) render();
@@ -514,6 +590,8 @@ db.collection("cajitas").orderBy("orden").onSnapshot(function(snap){
   state.cajitas=snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
   markLoaded(); if(loadedCount>=TOTAL) render();
 }, function(err){ console.error(err); markLoaded(); });
+
+} // fin iniciarListeners
 
 // ── Header ─────────────────────────────────────────────
 function updateHeader(){
