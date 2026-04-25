@@ -226,7 +226,6 @@ main{padding:16px;max-width:680px;margin:0 auto;padding-bottom:40px}
       <span class="modal-title">Nueva compra</span>
       <button class="modal-close" onclick="closeModal('compra')">✕</button>
     </div>
-    <div class="info-box">Al guardar, se actualizará el stock automáticamente.</div>
     <div class="field"><label>Producto del catálogo *</label>
       <select id="mc-prod" onchange="onProdCompraChange()"><option value="">-- Selecciona --</option></select>
     </div>
@@ -235,6 +234,13 @@ main{padding:16px;max-width:680px;margin:0 auto;padding-bottom:40px}
     <div class="field"><label>Proveedor</label><input id="mc-prov" placeholder="Nombre o tienda" autocomplete="off"/></div>
     <div class="field"><label>Fecha</label><input id="mc-fecha" type="date"/></div>
     <div class="field"><label>Nota</label><input id="mc-nota" placeholder="Opcional" autocomplete="off"/></div>
+    <div class="field">
+      <label>¿Afectar el stock?</label>
+      <div class="toggle-row">
+        <button class="toggle on" id="mc-stock-toggle" onclick="toggleMcStock()"></button>
+        <span class="sans" id="mc-stock-label" style="font-size:13px;color:#7a6a55">Sí, sumar al inventario</span>
+      </div>
+    </div>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn" onclick="saveCompra()">Guardar</button>
       <button class="btn sec" onclick="closeModal('compra')">Cancelar</button>
@@ -263,6 +269,13 @@ main{padding:16px;max-width:680px;margin:0 auto;padding-bottom:40px}
     <div class="field"><label>Cliente</label><input id="mv-cliente" placeholder="Opcional" autocomplete="off"/></div>
     <div class="field"><label>Fecha</label><input id="mv-fecha" type="date"/></div>
     <div class="field"><label>Nota</label><input id="mv-nota" placeholder="Opcional" autocomplete="off"/></div>
+    <div class="field">
+      <label>¿Afectar el stock?</label>
+      <div class="toggle-row">
+        <button class="toggle on" id="mv-stock-toggle" onclick="toggleMvStock()"></button>
+        <span class="sans" id="mv-stock-label" style="font-size:13px;color:#7a6a55">Sí, restar del inventario</span>
+      </div>
+    </div>
     <div style="display:flex;gap:8px;margin-top:8px">
       <button class="btn" onclick="saveVenta()">Guardar</button>
       <button class="btn sec" onclick="closeModal('venta')">Cancelar</button>
@@ -452,6 +465,7 @@ var currentTab = 0;
 var loadedCount = 0;
 var TOTAL = 7;
 var maEnStock = true, maPedido = false, menDescontar = true;
+var mcAfectaStock = true, mvAfectaStock = true;
 
 // ── Helpers ────────────────────────────────────────────
 function fmt(n){ return new Intl.NumberFormat("es-MX",{style:"currency",currency:"MXN"}).format(n||0); }
@@ -619,10 +633,136 @@ function renderCatalogo(){
 }
 
 // ── STOCK render ───────────────────────────────────────
-function renderStock(){
-  var h='<div class="row-flex" style="margin-bottom:16px"><h2 style="font-size:20px">Stock</h2></div>';
-  if(!state.catalogo.length) return h+'<div class="empty">Primero añade productos al catálogo.</div>';
+var stockVista = "resumen"; // "resumen" | "detalle"
 
+function renderStock(){
+  var h='<div class="row-flex" style="margin-bottom:12px"><h2 style="font-size:20px">Stock</h2>'+
+    '<div style="display:flex;gap:6px">'+
+      '<button class="btn'+(stockVista==="resumen"?"":" sec")+'" onclick="setStockVista(\'resumen\')" style="font-size:12px;padding:7px 12px">📊 Resumen</button>'+
+      '<button class="btn'+(stockVista==="detalle"?"":" sec")+'" onclick="setStockVista(\'detalle\')" style="font-size:12px;padding:7px 12px">📋 Detalle</button>'+
+    '</div></div>';
+  if(!state.catalogo.length) return h+'<div class="empty">Primero añade productos al catálogo.</div>';
+  if(stockVista==="resumen") return h+renderStockResumen();
+  return h+renderStockDetalle();
+}
+
+function setStockVista(v){ stockVista=v; render(); }
+
+function renderStockResumen(){
+  // Calcular datos agrupados
+  var totalProd=state.catalogo.length;
+  var sinStock=state.catalogo.filter(function(p){ return getStock(p.id)<=0; });
+  var criticos=state.catalogo.filter(function(p){ var q=getStock(p.id); return q>0&&q<=3; });
+  var bien=state.catalogo.filter(function(p){ return getStock(p.id)>3; });
+  var invTotal=state.catalogo.reduce(function(s,p){ return s+getStock(p.id)*(p.costo||0); },0);
+
+  // Por género
+  var generos={hombre:{label:"Hombre",emoji:"👔",color:"#1565c0",bg:"#e3f2fd",piezas:0,fragancias:0},
+               mujer:{label:"Mujer",emoji:"💄",color:"#c2185b",bg:"#fce4ec",piezas:0,fragancias:0},
+               unisex:{label:"Unisex",emoji:"✨",color:"#6a1b9a",bg:"#f3e5f5",piezas:0,fragancias:0}};
+  state.catalogo.forEach(function(p){
+    var g=p.genero||"unisex";
+    if(!generos[g]) return;
+    var qty=getStock(p.id);
+    if(qty>0){ generos[g].piezas+=qty; generos[g].fragancias++; }
+  });
+
+  // Por categoría
+  var cats={premium:{label:"Premium",color:"#c9843a",bg:"#fdf3cd",count:0,piezas:0},
+            normal:{label:"Normal",color:"#27ae60",bg:"#e8f5e9",count:0,piezas:0},
+            basica:{label:"Básica",color:"#666",bg:"#f0f0f0",count:0,piezas:0}};
+  state.catalogo.forEach(function(p){
+    var c=p.categoria||"normal";
+    if(!cats[c]) return;
+    var qty=getStock(p.id);
+    if(qty>0){ cats[c].count++; cats[c].piezas+=qty; }
+  });
+
+  // Top 5 con más stock
+  var ranking=state.catalogo.map(function(p){ return {p:p,qty:getStock(p.id)}; })
+    .sort(function(a,b){ return b.qty-a.qty; }).slice(0,5);
+
+  var h='';
+
+  // Tarjetas semáforo
+  h+='<div class="stat-grid" style="margin-bottom:16px">'+
+    '<div class="stat-card"><div class="slabel">Total productos</div><div class="svalue" style="color:#1a1208">'+totalProd+'</div></div>'+
+    '<div class="stat-card"><div class="slabel">Inversión en stock</div><div class="svalue" style="color:#3498db;font-size:14px">'+fmt(invTotal)+'</div></div>'+
+    '<div class="stat-card"><div class="slabel">🟢 Bien surtidos</div><div class="svalue" style="color:#27ae60">'+bien.length+'</div></div>'+
+    '<div class="stat-card"><div class="slabel">🟡 Últimas unidades</div><div class="svalue" style="color:#e67e22">'+criticos.length+'</div></div>'+
+  '</div>';
+
+  // Por género
+  h+='<div class="stitle">Por género</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">';
+  Object.values(generos).forEach(function(g){
+    h+='<div class="card" style="padding:12px;text-align:center;border-top:3px solid '+g.color+'">'+
+      '<div style="font-size:24px;margin-bottom:4px">'+g.emoji+'</div>'+
+      '<div class="sans" style="font-size:11px;font-weight:700;color:'+g.color+';text-transform:uppercase;letter-spacing:1px">'+g.label+'</div>'+
+      '<div style="font-size:20px;font-weight:600;margin-top:4px;color:#1a1208">'+g.piezas+'</div>'+
+      '<div class="sans" style="font-size:10px;color:#9a8a75">piezas · '+g.fragancias+' fragancias</div>'+
+    '</div>';
+  });
+  h+='</div>';
+
+  // Por categoría
+  h+='<div class="stitle">Por categoría</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">';
+  Object.values(cats).forEach(function(c){
+    h+='<div class="card" style="padding:12px;text-align:center;border-top:3px solid '+c.color+'">'+
+      '<div class="sans" style="font-size:11px;font-weight:700;color:'+c.color+';text-transform:uppercase;letter-spacing:1px">'+c.label+'</div>'+
+      '<div style="font-size:20px;font-weight:600;margin-top:6px;color:#1a1208">'+c.piezas+'</div>'+
+      '<div class="sans" style="font-size:10px;color:#9a8a75">piezas · '+c.count+' fragancias</div>'+
+    '</div>';
+  });
+  h+='</div>';
+
+  // Alertas
+  if(sinStock.length){
+    h+='<div class="stitle">🔴 Sin stock ('+sinStock.length+')</div>';
+    h+='<div class="card" style="padding:12px 16px;margin-bottom:16px;background:#fff5f5;border:1px solid #ffcdd2">';
+    sinStock.forEach(function(p){
+      h+='<div class="sans" style="font-size:13px;padding:4px 0;border-bottom:1px solid #ffe0e0;color:#c0392b">'+
+        esc(p.marca)+' · '+esc(p.nombre)+'</div>';
+    });
+    h+='</div>';
+  }
+  if(criticos.length){
+    h+='<div class="stitle">🟡 Últimas unidades</div>';
+    h+='<div class="card" style="padding:12px 16px;margin-bottom:16px;background:#fffde7;border:1px solid #ffe082">';
+    criticos.forEach(function(p){
+      var qty=getStock(p.id);
+      h+='<div class="row-flex sans" style="font-size:13px;padding:4px 0;border-bottom:1px solid #fff9c4">'+
+        '<span style="color:#7a6a55">'+esc(p.marca)+' · '+esc(p.nombre)+'</span>'+
+        '<span style="color:#e67e22;font-weight:700">'+qty+' ud.</span>'+
+      '</div>';
+    });
+    h+='</div>';
+  }
+
+  // Top 5
+  if(ranking.some(function(r){ return r.qty>0; })){
+    h+='<div class="stitle">Top 5 con más stock</div>';
+    h+='<div class="card" style="padding:12px 16px;margin-bottom:16px">';
+    ranking.filter(function(r){ return r.qty>0; }).forEach(function(r,i){
+      h+='<div class="row-flex" style="padding:6px 0;border-bottom:1px solid #efe8dc">'+
+        '<div style="display:flex;align-items:center;gap:10px">'+
+          '<span class="sans" style="font-size:12px;color:#c9843a;font-weight:700;width:18px">'+(i+1)+'</span>'+
+          (r.p.foto?'<img src="'+esc(r.p.foto)+'" style="width:32px;height:32px;border-radius:6px;object-fit:cover"/>':'<div style="width:32px;height:32px;border-radius:6px;background:#f5ede0;display:flex;align-items:center;justify-content:center;font-size:16px">🧴</div>')+
+          '<div><div class="sans" style="font-size:13px;font-weight:500">'+esc(r.p.nombre)+'</div>'+
+          '<div class="sans" style="font-size:11px;color:#9a8a75">'+esc(r.p.marca)+'</div></div>'+
+        '</div>'+
+        '<span class="stock-badge sok" style="font-size:18px">'+r.qty+'</span>'+
+      '</div>';
+    });
+    h+='</div>';
+  }
+
+  return h;
+}
+
+function renderStockDetalle(){
+  var h='';
   var marcas=[]; state.catalogo.forEach(function(p){ if(marcas.indexOf(p.marca)<0) marcas.push(p.marca); }); marcas.sort();
   marcas.forEach(function(marca){
     h+='<div class="marca-tag">'+esc(marca)+'</div>';
@@ -652,13 +792,23 @@ function renderCompras(){
   var h='<div class="row-flex" style="margin-bottom:16px"><h2 style="font-size:20px">Compras</h2><button class="btn" onclick="openModal(\'compra\')">+ Registrar</button></div>';
   if(!state.compras.length) return h+'<div class="empty">Sin compras registradas aún.</div>';
   state.compras.forEach(function(c){
-    h+='<div class="card item row-flex" style="margin-bottom:8px">'+
-      '<div><div class="item-title">'+esc(c.marca)+' · '+esc(c.producto)+'</div>'+
-      '<div class="item-sub">'+esc(c.proveedor||"Sin proveedor")+' · '+esc(c.fecha)+'</div>'+
-      (c.nota?'<div class="item-note">'+esc(c.nota)+'</div>':'')+
-      '</div><div style="text-align:right;flex-shrink:0;margin-left:10px">'+
-      '<div class="sans" style="font-weight:700">'+fmt(c.total)+'</div>'+
-      '<div class="sans" style="font-size:12px;color:#7a6a55">×'+c.cantidad+' uds.</div></div></div>';
+    h+='<div class="card item" style="margin-bottom:8px">'+
+      '<div class="row-flex">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div class="item-title">'+esc(c.marca)+' · '+esc(c.producto)+'</div>'+
+          '<div class="item-sub">'+esc(c.proveedor||"Sin proveedor")+' · '+esc(c.fecha)+'</div>'+
+          (c.nota?'<div class="item-note">'+esc(c.nota)+'</div>':'')+
+          (c.afectoStock===false?'<div class="sans" style="font-size:11px;color:#9a8a75;margin-top:2px">⚠️ No afectó stock</div>':'')+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:10px">'+
+          '<div style="text-align:right">'+
+            '<div class="sans" style="font-weight:700">'+fmt(c.total)+'</div>'+
+            '<div class="sans" style="font-size:12px;color:#7a6a55">×'+c.cantidad+' uds.</div>'+
+          '</div>'+
+          '<button class="btn-sm danger" onclick="delCompra(\''+c.id+'\')">🗑️</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
   });
   return h;
 }
@@ -669,13 +819,23 @@ function renderVentas(){
   if(!state.ventas.length) return h+'<div class="empty">Sin ventas registradas aún.</div>';
   state.ventas.forEach(function(v){
     var gan=(v.total||0)-(v.costoTotal||0);
-    h+='<div class="card item row-flex" style="margin-bottom:8px">'+
-      '<div><div class="item-title">'+esc(v.marca)+' · '+esc(v.producto)+'</div>'+
-      '<div class="item-sub">'+esc(v.canal)+(v.cliente?' · '+esc(v.cliente):'')+' · '+esc(v.fecha)+'</div>'+
-      (v.nota?'<div class="item-note">'+esc(v.nota)+'</div>':'')+
-      '</div><div style="text-align:right;flex-shrink:0;margin-left:10px">'+
-      '<div class="sans" style="font-weight:700;color:#27ae60">'+fmt(v.total)+'</div>'+
-      '<div class="sans" style="font-size:12px;color:#7a6a55">×'+v.cantidad+' · gan: '+fmt(gan)+'</div></div></div>';
+    h+='<div class="card item" style="margin-bottom:8px">'+
+      '<div class="row-flex">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div class="item-title">'+esc(v.marca)+' · '+esc(v.producto)+'</div>'+
+          '<div class="item-sub">'+esc(v.canal)+(v.cliente?' · '+esc(v.cliente):'')+' · '+esc(v.fecha)+'</div>'+
+          (v.nota?'<div class="item-note">'+esc(v.nota)+'</div>':'')+
+          (v.afectoStock===false?'<div class="sans" style="font-size:11px;color:#9a8a75;margin-top:2px">⚠️ No afectó stock</div>':'')+
+        '</div>'+
+        '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:10px">'+
+          '<div style="text-align:right">'+
+            '<div class="sans" style="font-weight:700;color:#27ae60">'+fmt(v.total)+'</div>'+
+            '<div class="sans" style="font-size:12px;color:#7a6a55">×'+v.cantidad+' · gan: '+fmt(gan)+'</div>'+
+          '</div>'+
+          '<button class="btn-sm danger" onclick="delVenta(\''+v.id+'\')">🗑️</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
   });
   return h;
 }
@@ -737,6 +897,7 @@ function renderApartadoCard(a){
     btns+='<button class="btn-sm" onclick="openModal(\'apartado\',\''+a.id+'\')">✏️</button> ';
     btns+='<button class="btn-sm" style="background:#e8f5e9;font-size:12px" onclick="abrirEntregar(\''+a.id+'\')">✔ Entregar</button>';
   }
+  btns+=' <button class="btn-sm danger" onclick="delApartado(\''+a.id+'\')" style="margin-top:4px">🗑️</button>';
   return '<div class="card item" style="margin-bottom:10px">'+
     '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
       '<div style="flex:1;min-width:0">'+
@@ -864,6 +1025,8 @@ function openModal(name, extra){
     document.getElementById("mst-stock").value=getStock(extra);
   }
   if(name==="compra"){
+    mcAfectaStock=true;
+    refreshToggle("mc-stock-toggle","mc-stock-label",true,"Sí, sumar al inventario","No, solo registrar");
     document.getElementById("mc-cant").value="";
     document.getElementById("mc-costo").value="";
     document.getElementById("mc-prov").value="";
@@ -871,6 +1034,8 @@ function openModal(name, extra){
     document.getElementById("mc-fecha").value=today();
   }
   if(name==="venta"){
+    mvAfectaStock=true;
+    refreshToggle("mv-stock-toggle","mv-stock-label",true,"Sí, restar del inventario","No, solo registrar");
     document.getElementById("mv-cant").value="1";
     document.getElementById("mv-precio").value="";
     document.getElementById("mv-cliente").value="";
@@ -942,6 +1107,8 @@ function refreshToggle(btnId,labelId,st,trueL,falseL){
 function toggleEnStock(){ maEnStock=!maEnStock; refreshToggle("ma-enstock-toggle","ma-enstock-label",maEnStock,"Sí, está en stock","No está en stock"); document.getElementById("ma-stock-section").style.display=maEnStock?"":"none"; document.getElementById("ma-nostock-section").style.display=maEnStock?"none":""; }
 function togglePedido(){ maPedido=!maPedido; refreshToggle("ma-pedido-toggle","ma-pedido-label",maPedido,"Pedido al proveedor","No pedido aún"); }
 function toggleDescontar(){ menDescontar=!menDescontar; refreshToggle("men-descontar-toggle","men-descontar-label",menDescontar,"Sí, descontar unidades","No descontar"); }
+function toggleMcStock(){ mcAfectaStock=!mcAfectaStock; refreshToggle("mc-stock-toggle","mc-stock-label",mcAfectaStock,"Sí, sumar al inventario","No, solo registrar"); }
+function toggleMvStock(){ mvAfectaStock=!mvAfectaStock; refreshToggle("mv-stock-toggle","mv-stock-label",mvAfectaStock,"Sí, restar del inventario","No, solo registrar"); }
 
 // ── CRUD Catálogo ──────────────────────────────────────
 function saveCatalogo(){
@@ -1002,15 +1169,37 @@ function saveCompra(){
     proveedor:document.getElementById("mc-prov").value.trim(),
     fecha:document.getElementById("mc-fecha").value||today(),
     nota:document.getElementById("mc-nota").value.trim(),
+    afectoStock:mcAfectaStock,
     ts:firebase.firestore.FieldValue.serverTimestamp()
   }).then(function(){
-    // update stock
+    if(!mcAfectaStock) return Promise.resolve();
     var doc=getStockDoc(catId);
     return doc
       ?db.collection("stock").doc(doc.id).update({cantidad:(doc.cantidad||0)+cant})
       :db.collection("stock").add({catId:catId,cantidad:cant,ts:firebase.firestore.FieldValue.serverTimestamp()});
-  }).then(function(){ closeModal("compra"); toast("✅ Compra registrada · stock actualizado"); })
+  }).then(function(){ closeModal("compra"); toast("✅ Compra registrada"+(mcAfectaStock?" · stock actualizado":"")); })
   .catch(function(err){ toast("❌ "+err.message); });
+}
+function delCompra(id){
+  var c=state.compras.find(function(x){ return x.id===id; }); if(!c) return;
+  var label='"'+c.marca+' · '+c.producto+' (×'+c.cantidad+')"';
+  var revertir=false;
+  if(c.afectoStock!==false && c.catId){
+    revertir=confirm('¿Eliminar la compra '+label+'?\n\nPresiona OK para también REVERTIR el stock (−'+c.cantidad+' unidades).\nPresiona Cancelar para solo borrar el registro sin afectar el stock.');
+    if(revertir===null) return; // user closed dialog — but confirm only returns true/false
+  } else {
+    if(!confirm('¿Eliminar la compra '+label+'?')) return;
+  }
+  var promise=db.collection("compras").doc(id).delete();
+  if(revertir && c.catId){
+    var doc=getStockDoc(c.catId);
+    if(doc){
+      var newQty=Math.max(0,(doc.cantidad||0)-(c.cantidad||0));
+      promise=promise.then(function(){ return db.collection("stock").doc(doc.id).update({cantidad:newQty}); });
+    }
+  }
+  promise.then(function(){ toast("🗑️ Compra eliminada"+(revertir?" · stock revertido":"")); })
+    .catch(function(err){ toast("❌ "+err.message); });
 }
 
 // ── CRUD Venta ─────────────────────────────────────────
@@ -1024,8 +1213,10 @@ function saveVenta(){
   var cant=parseInt(document.getElementById("mv-cant").value)||1;
   if(!catId){ toast("⚠️ Selecciona un producto"); return; }
   var p=state.catalogo.find(function(x){ return x.id===catId; }); if(!p) return;
-  var qty=getStock(catId);
-  if(qty<cant){ toast("⚠️ Stock insuficiente ("+qty+" disponibles)"); return; }
+  if(mvAfectaStock){
+    var qty=getStock(catId);
+    if(qty<cant){ toast("⚠️ Stock insuficiente ("+qty+" disponibles)"); return; }
+  }
   var precio=parseFloat(document.getElementById("mv-precio").value)||p.precio;
   db.collection("ventas").add({
     catId:catId, producto:p.nombre, marca:p.marca,
@@ -1034,12 +1225,33 @@ function saveVenta(){
     cliente:document.getElementById("mv-cliente").value.trim(),
     fecha:document.getElementById("mv-fecha").value||today(),
     nota:document.getElementById("mv-nota").value.trim(),
+    afectoStock:mvAfectaStock,
     ts:firebase.firestore.FieldValue.serverTimestamp()
   }).then(function(){
+    if(!mvAfectaStock) return Promise.resolve();
     var doc=getStockDoc(catId);
     return doc?db.collection("stock").doc(doc.id).update({cantidad:Math.max(0,(doc.cantidad||0)-cant)}):Promise.resolve();
-  }).then(function(){ closeModal("venta"); toast("✅ Venta registrada"); })
+  }).then(function(){ closeModal("venta"); toast("✅ Venta registrada"+(mvAfectaStock?" · stock actualizado":"")); })
   .catch(function(err){ toast("❌ "+err.message); });
+}
+function delVenta(id){
+  var v=state.ventas.find(function(x){ return x.id===id; }); if(!v) return;
+  var label='"'+v.marca+' · '+v.producto+' (×'+v.cantidad+')"';
+  var revertir=false;
+  if(v.afectoStock!==false && v.catId){
+    revertir=confirm('¿Eliminar la venta '+label+'?\n\nOK = también DEVOLVER '+v.cantidad+' unidad(es) al stock.\nCancelar = solo borrar el registro.');
+  } else {
+    if(!confirm('¿Eliminar la venta '+label+'?')) return;
+  }
+  var promise=db.collection("ventas").doc(id).delete();
+  if(revertir && v.catId){
+    var doc=getStockDoc(v.catId);
+    if(doc){
+      promise=promise.then(function(){ return db.collection("stock").doc(doc.id).update({cantidad:(doc.cantidad||0)+(v.cantidad||0)}); });
+    }
+  }
+  promise.then(function(){ toast("🗑️ Venta eliminada"+(revertir?" · stock devuelto":"")); })
+    .catch(function(err){ toast("❌ "+err.message); });
 }
 
 // ── CAJITAS render ─────────────────────────────────────
@@ -1224,6 +1436,27 @@ function delCliente(id){
   var c=state.clientes.find(function(x){ return x.id===id; });
   if(!confirm('¿Eliminar a "'+(c?c.nombre:id)+'"?')) return;
   db.collection("clientes").doc(id).delete().then(function(){ toast("🗑️ Cliente eliminado"); }).catch(function(err){ toast("❌ "+err.message); });
+}
+function delApartado(id){
+  var a=state.apartados.find(function(x){ return x.id===id; }); if(!a) return;
+  var nombre=a.clienteNombre||(state.clientes.find(function(c){ return c.id===a.clienteId; })||{}).nombre||"cliente";
+  var perfume=a.enStock?(a.productoNombre||"producto"):(a.descripcion||"apartado");
+  var label='"'+nombre+' · '+perfume+'"';
+  var revertir=false;
+  if(a.enStock && a.productoId && a.estado!=='entregado'){
+    revertir=confirm('¿Eliminar el apartado '+label+'?\n\nOK = también DEVOLVER '+(a.cantidad||1)+' unidad(es) al stock.\nCancelar = solo borrar el registro.');
+  } else {
+    if(!confirm('¿Eliminar el apartado '+label+'?')) return;
+  }
+  var promise=db.collection("apartados").doc(id).delete();
+  if(revertir && a.productoId){
+    var doc=getStockDoc(a.productoId);
+    if(doc){
+      promise=promise.then(function(){ return db.collection("stock").doc(doc.id).update({cantidad:(doc.cantidad||0)+(a.cantidad||1)}); });
+    }
+  }
+  promise.then(function(){ toast("🗑️ Apartado eliminado"+(revertir?" · stock devuelto":"")); })
+    .catch(function(err){ toast("❌ "+err.message); });
 }
 
 // ── CRUD Apartado ──────────────────────────────────────
