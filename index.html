@@ -97,7 +97,30 @@ main{padding:16px;max-width:680px;margin:0 auto;padding-bottom:40px}
 .cb-m{background:#fce4ec;color:#c2185b}
 .cb-u{background:#f3e5f5;color:#6a1b9a}
 
-/* Foto upload */
+/* Cajitas */
+.cajita-tipo-btn{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.cajita-tipo-btn button{padding:6px 14px;border-radius:20px;border:1px solid #ddd4c4;background:#faf7f4;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;transition:all .2s;color:#7a6a55}
+.cajita-tipo-btn button.active-tipo{background:#1a1208;color:#f5e6c8;border-color:#1a1208}
+.caj-grid{display:grid;grid-template-columns:1fr;gap:14px;margin-top:4px}
+.caj-card{background:#fff;border-radius:14px;box-shadow:0 2px 12px rgba(26,18,8,.09);overflow:hidden;display:flex;flex-direction:column}
+.caj-img-wrap{width:100%;height:160px;background:#f5ede0;display:flex;align-items:center;justify-content:center;font-size:48px;position:relative}
+.caj-img-wrap img{width:100%;height:160px;object-fit:cover}
+.caj-badge-top{position:absolute;top:10px;right:10px;background:#1a1208;color:#f5e6c8;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:2px;padding:3px 10px;border-radius:4px;text-transform:uppercase}
+.caj-body{padding:14px 16px;flex:1;display:flex;flex-direction:column;gap:6px}
+.caj-nombre{font-size:17px;font-weight:500}
+.caj-desc{font-family:'DM Sans',sans-serif;font-size:13px;color:#7a6a55;line-height:1.5}
+.caj-incluye-label{font-family:'DM Sans',sans-serif;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:2px;color:#c9843a;margin-top:4px}
+.caj-incluye-list{font-family:'DM Sans',sans-serif;font-size:12px;color:#555;line-height:2}
+.caj-footer{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-top:1px solid #f0e8dc;background:#faf7f4}
+.caj-precio{font-size:20px;font-weight:500}
+.caj-precio span{font-family:'DM Sans',sans-serif;font-size:12px;color:#9a8a75;font-weight:400}
+.caj-tipo-tag{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;padding:3px 10px;border-radius:10px;background:#f5e6c8;color:#c9843a}
+.caj-actions{display:flex;gap:6px}
+/* incluye items editor */
+.incluye-item-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.incluye-item-row input{flex:1;border:1px solid #ddd4c4;border-radius:7px;padding:7px 10px;font-family:'DM Sans',sans-serif;font-size:13px;background:#faf7f4;color:#1a1208}
+.incluye-item-row input:focus{outline:none;border-color:#c9843a}
+
 .foto-area{border:2px dashed #ddd4c4;border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:12px;position:relative}
 .foto-area:hover{border-color:#c9843a}
 .foto-area input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
@@ -126,6 +149,7 @@ main{padding:16px;max-width:680px;margin:0 auto;padding-bottom:40px}
   <button onclick="setTab(4)">🤝 Apartados</button>
   <button onclick="setTab(5)">👥 Clientes</button>
   <button onclick="setTab(6)">📊 Finanzas</button>
+  <button onclick="setTab(7)">🎁 Cajitas</button>
 </nav>
 
 <main id="app"><div class="spinner"></div></main>
@@ -357,6 +381,54 @@ main{padding:16px;max-width:680px;margin:0 auto;padding-bottom:40px}
   </div>
 </div>
 
+<!-- ── MODAL: Cajita ── -->
+<div id="modal-cajita" class="modal-bg hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="mcaj-title">Nueva cajita</span>
+      <button class="modal-close" onclick="closeModal('cajita')">✕</button>
+    </div>
+    <input type="hidden" id="mcaj-id"/>
+
+    <div class="foto-area" id="cajita-foto-area" onclick="document.getElementById('mcaj-foto-input').click()">
+      <input type="file" id="mcaj-foto-input" accept="image/*" style="display:none" onchange="onCajFotoSelected(event)"/>
+      <div id="cajita-foto-preview-wrap">
+        <div style="font-size:32px;margin-bottom:6px">🎁</div>
+        <div class="sans" style="font-size:13px;color:#9a8a75">Toca para subir foto de la cajita</div>
+      </div>
+      <div id="cajita-foto-uploading" class="foto-uploading" style="display:none">⏳ Subiendo foto…</div>
+    </div>
+    <input type="hidden" id="mcaj-foto-url"/>
+
+    <div class="field"><label>Nombre de la cajita *</label><input id="mcaj-nombre" placeholder="Cajita Esencial, Signature, Personalizada…" autocomplete="off"/></div>
+    <div class="field"><label>Descripción corta *</label><textarea id="mcaj-desc" placeholder="Descripción atractiva para el cliente…" style="min-height:70px"></textarea></div>
+    <div class="field"><label>Tipo</label>
+      <select id="mcaj-tipo">
+        <option value="armada">Armada (ejemplo fijo)</option>
+        <option value="personalizable">Personalizable</option>
+      </select>
+    </div>
+    <div class="field"><label>Etiqueta especial (opcional)</label><input id="mcaj-etiqueta" placeholder="MÁS POPULAR · LUJO · NUEVA…" autocomplete="off"/></div>
+    <div class="field"><label>Precio (MXN) *</label><input id="mcaj-precio" type="number" placeholder="450"/></div>
+    <div class="field"><label>Prefijo de precio</label>
+      <select id="mcaj-precio-prefix">
+        <option value="">$</option>
+        <option value="Desde ">Desde $</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>¿Qué incluye? <span style="font-weight:400;font-size:11px;color:#b0a090">(agrega cada ítem)</span></label>
+      <div id="incluye-lista"></div>
+      <button class="btn sec" style="font-size:13px;padding:7px 14px;margin-top:4px" onclick="addIncluyeItem()">+ Agregar ítem</button>
+    </div>
+    <div class="field"><label>Orden de aparición</label><input id="mcaj-orden" type="number" placeholder="1" value="1"/></div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn" onclick="saveCajita()">Guardar cajita</button>
+      <button class="btn sec" onclick="closeModal('cajita')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── Firebase ───────────────────────────────────────────
 var firebaseConfig = {
@@ -375,10 +447,10 @@ var CLOUD_NAME = "ddv2nn8ic";
 var UPLOAD_PRESET = "SignatureDecantsMini";
 
 // ── State ──────────────────────────────────────────────
-var state = { catalogo: [], stock: [], compras: [], ventas: [], clientes: [], apartados: [] };
+var state = { catalogo: [], stock: [], compras: [], ventas: [], clientes: [], apartados: [], cajitas: [] };
 var currentTab = 0;
 var loadedCount = 0;
-var TOTAL = 6;
+var TOTAL = 7;
 var maEnStock = true, maPedido = false, menDescontar = true;
 
 // ── Helpers ────────────────────────────────────────────
@@ -421,6 +493,11 @@ db.collection("clientes").orderBy("nombre").onSnapshot(function(snap){
 
 db.collection("apartados").orderBy("ts","desc").onSnapshot(function(snap){
   state.apartados=snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+  markLoaded(); if(loadedCount>=TOTAL) render();
+}, function(err){ console.error(err); markLoaded(); });
+
+db.collection("cajitas").orderBy("orden").onSnapshot(function(snap){
+  state.cajitas=snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
   markLoaded(); if(loadedCount>=TOTAL) render();
 }, function(err){ console.error(err); markLoaded(); });
 
@@ -473,7 +550,8 @@ function render(){
   else if(currentTab===3) el.innerHTML=renderVentas();
   else if(currentTab===4) el.innerHTML=renderApartados();
   else if(currentTab===5) el.innerHTML=renderClientes();
-  else el.innerHTML=renderFinanzas();
+  else if(currentTab===6) el.innerHTML=renderFinanzas();
+  else el.innerHTML=renderCajitas();
   populateSelects();
 }
 
@@ -964,7 +1042,175 @@ function saveVenta(){
   .catch(function(err){ toast("❌ "+err.message); });
 }
 
-// ── CRUD Cliente ───────────────────────────────────────
+// ── CAJITAS render ─────────────────────────────────────
+var cajFiltroTipo = "todas";
+
+function renderCajitas(){
+  var h='<div class="row-flex" style="margin-bottom:12px"><h2 style="font-size:20px">🎁 Cajitas</h2><button class="btn" onclick="openCajitaModal()">+ Nueva cajita</button></div>';
+  h+='<div class="cajita-tipo-btn">'+
+    '<button class="'+(cajFiltroTipo==="todas"?"active-tipo":"")+'" onclick="setCajFiltro(\'todas\')">Todas</button>'+
+    '<button class="'+(cajFiltroTipo==="armada"?"active-tipo":"")+'" onclick="setCajFiltro(\'armada\')">Armadas</button>'+
+    '<button class="'+(cajFiltroTipo==="personalizable"?"active-tipo":"")+'" onclick="setCajFiltro(\'personalizable\')">Personalizables</button>'+
+  '</div>';
+
+  if(!state.cajitas.length) return h+'<div class="empty">Sin cajitas creadas. Agrega la primera.</div>';
+  var lista=cajFiltroTipo==="todas"?state.cajitas:state.cajitas.filter(function(c){ return c.tipo===cajFiltroTipo; });
+  if(!lista.length) return h+'<div class="empty">Sin cajitas de este tipo.</div>';
+
+  h+='<div class="caj-grid">';
+  lista.forEach(function(c){
+    var imgHtml=c.foto
+      ?'<img src="'+esc(c.foto)+'"/>'
+      :'<span style="font-size:44px">🎁</span>';
+    var badgeHtml=c.etiqueta?'<div class="caj-badge-top">'+esc(c.etiqueta)+'</div>':'';
+    var incluyeHtml='';
+    if(c.incluye&&c.incluye.length){
+      incluyeHtml='<div class="caj-incluye-label">INCLUYE</div><div class="caj-incluye-list">';
+      c.incluye.forEach(function(item){ if(item) incluyeHtml+='— '+esc(item)+'<br>'; });
+      incluyeHtml+='</div>';
+    }
+    var prefix=c.precioPrefix||'';
+    h+='<div class="caj-card">'+
+      '<div class="caj-img-wrap">'+imgHtml+badgeHtml+'</div>'+
+      '<div class="caj-body">'+
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+          '<div class="caj-nombre">'+esc(c.nombre)+'</div>'+
+          '<div class="caj-tipo-tag">'+( c.tipo==='personalizable'?'Personalizable':'Armada')+'</div>'+
+        '</div>'+
+        '<div class="caj-desc">'+esc(c.descripcion||'')+'</div>'+
+        incluyeHtml+
+      '</div>'+
+      '<div class="caj-footer">'+
+        '<div class="caj-precio">'+esc(prefix)+'$'+esc(String(c.precio||0))+' <span>MXN</span></div>'+
+        '<div class="caj-actions">'+
+          '<button class="btn-sm" onclick="openCajitaModal(\''+c.id+'\')">✏️</button>'+
+          '<button class="btn-sm danger" onclick="delCajita(\''+c.id+'\')">🗑️</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  });
+  h+='</div>';
+  h+='<div class="info-box" style="margin-top:16px">💡 Estas cajitas se muestran en tu página pública automáticamente.</div>';
+  return h;
+}
+
+function setCajFiltro(tipo){
+  cajFiltroTipo=tipo;
+  render();
+}
+
+// ── CAJITA modal ───────────────────────────────────────
+var incluyeItems=[];
+
+function addIncluyeItem(val){
+  incluyeItems.push(val||"");
+  renderIncluyeLista();
+}
+function removeIncluyeItem(idx){
+  incluyeItems.splice(idx,1);
+  renderIncluyeLista();
+}
+function renderIncluyeLista(){
+  var el=document.getElementById("incluye-lista"); if(!el) return;
+  var h="";
+  incluyeItems.forEach(function(v,i){
+    h+='<div class="incluye-item-row">'+
+      '<input value="'+esc(v)+'" placeholder="Ej: 3 muestras de perfume (5ml c/u)" oninput="incluyeItems['+i+']=this.value"/>'+
+      '<button class="btn-sm danger" onclick="removeIncluyeItem('+i+')">✕</button>'+
+    '</div>';
+  });
+  el.innerHTML=h;
+}
+
+function openCajitaModal(id){
+  incluyeItems=[];
+  document.getElementById("mcaj-foto-url").value="";
+  document.getElementById("mcaj-foto-input").value="";
+  document.getElementById("cajita-foto-uploading").style.display="none";
+  var pw=document.getElementById("cajita-foto-preview-wrap");
+
+  if(id){
+    var c=state.cajitas.find(function(x){ return x.id===id; }); if(!c) return;
+    document.getElementById("mcaj-title").textContent="Editar cajita";
+    document.getElementById("mcaj-id").value=c.id;
+    document.getElementById("mcaj-nombre").value=c.nombre||"";
+    document.getElementById("mcaj-desc").value=c.descripcion||"";
+    document.getElementById("mcaj-tipo").value=c.tipo||"armada";
+    document.getElementById("mcaj-etiqueta").value=c.etiqueta||"";
+    document.getElementById("mcaj-precio").value=c.precio||"";
+    document.getElementById("mcaj-precio-prefix").value=c.precioPrefix||"";
+    document.getElementById("mcaj-orden").value=c.orden||1;
+    document.getElementById("mcaj-foto-url").value=c.foto||"";
+    incluyeItems=(c.incluye||[]).slice();
+    pw.innerHTML=c.foto
+      ?'<img src="'+c.foto+'" class="foto-preview"/><div class="sans" style="font-size:12px;color:#27ae60">✅ Foto actual · toca para cambiar</div>'
+      :'<div style="font-size:32px;margin-bottom:6px">🎁</div><div class="sans" style="font-size:13px;color:#9a8a75">Toca para subir foto</div>';
+    pw.style.display="block";
+  } else {
+    document.getElementById("mcaj-title").textContent="Nueva cajita";
+    document.getElementById("mcaj-id").value="";
+    ["mcaj-nombre","mcaj-desc","mcaj-etiqueta","mcaj-precio"].forEach(function(x){ var el=document.getElementById(x); if(el) el.value=""; });
+    document.getElementById("mcaj-tipo").value="armada";
+    document.getElementById("mcaj-precio-prefix").value="";
+    document.getElementById("mcaj-orden").value="1";
+    pw.innerHTML='<div style="font-size:32px;margin-bottom:6px">🎁</div><div class="sans" style="font-size:13px;color:#9a8a75">Toca para subir foto</div>';
+    pw.style.display="block";
+  }
+  renderIncluyeLista();
+  document.getElementById("modal-cajita").classList.remove("hidden");
+}
+
+function onCajFotoSelected(event){
+  var file=event.target.files[0]; if(!file) return;
+  var pw=document.getElementById("cajita-foto-preview-wrap");
+  var uploading=document.getElementById("cajita-foto-uploading");
+  uploading.style.display="block"; pw.style.display="none";
+  var formData=new FormData();
+  formData.append("file",file);
+  formData.append("upload_preset",UPLOAD_PRESET);
+  fetch("https://api.cloudinary.com/v1_1/"+CLOUD_NAME+"/image/upload",{method:"POST",body:formData})
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+      uploading.style.display="none";
+      if(data.secure_url){
+        document.getElementById("mcaj-foto-url").value=data.secure_url;
+        pw.style.display="block";
+        pw.innerHTML='<img src="'+data.secure_url+'" class="foto-preview"/><div class="sans" style="font-size:12px;color:#27ae60">✅ Foto subida</div>';
+        toast("✅ Foto subida correctamente");
+      } else { pw.style.display="block"; toast("❌ Error al subir foto"); }
+    })
+    .catch(function(){ uploading.style.display="none"; pw.style.display="block"; toast("❌ Error de conexión"); });
+}
+
+function saveCajita(){
+  var nombre=document.getElementById("mcaj-nombre").value.trim();
+  var precio=parseFloat(document.getElementById("mcaj-precio").value)||0;
+  if(!nombre){ toast("⚠️ El nombre es obligatorio"); return; }
+  if(!precio){ toast("⚠️ Ingresa el precio"); return; }
+  var data={
+    nombre:nombre,
+    descripcion:document.getElementById("mcaj-desc").value.trim(),
+    tipo:document.getElementById("mcaj-tipo").value,
+    etiqueta:document.getElementById("mcaj-etiqueta").value.trim(),
+    precio:precio,
+    precioPrefix:document.getElementById("mcaj-precio-prefix").value,
+    incluye:incluyeItems.filter(function(x){ return x.trim(); }),
+    foto:document.getElementById("mcaj-foto-url").value||"",
+    orden:parseInt(document.getElementById("mcaj-orden").value)||1
+  };
+  var id=document.getElementById("mcaj-id").value;
+  (id?db.collection("cajitas").doc(id).update(data):db.collection("cajitas").add(Object.assign(data,{ts:firebase.firestore.FieldValue.serverTimestamp()})))
+    .then(function(){ closeModal("cajita"); toast(id?"✅ Cajita actualizada":"✅ Cajita añadida"); })
+    .catch(function(err){ toast("❌ "+err.message); });
+}
+
+function delCajita(id){
+  var c=state.cajitas.find(function(x){ return x.id===id; });
+  if(!confirm('¿Eliminar la cajita "'+(c?c.nombre:id)+'"?')) return;
+  db.collection("cajitas").doc(id).delete().then(function(){ toast("🗑️ Cajita eliminada"); }).catch(function(err){ toast("❌ "+err.message); });
+}
+
+
 function saveCliente(){
   var nombre=document.getElementById("mcl-nombre").value.trim();
   if(!nombre){ toast("⚠️ El nombre es obligatorio"); return; }
